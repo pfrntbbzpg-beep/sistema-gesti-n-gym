@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistema de Gestión GYM</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <h1>Clientes del Gym</h1>
+
+  <form id="formCliente">
+    <input type="text" id="nombre" placeholder="Nombre" required>
+    <input type="text" id="telefono" placeholder="Teléfono">
+    <input type="email" id="correo" placeholder="Correo">
+    <button type="submit">Agregar cliente</button>
+  </form>
+
+  <ul id="listaClientes"></ul>
+
+  <script src="index.js"></script>
+</body>
+</html>
