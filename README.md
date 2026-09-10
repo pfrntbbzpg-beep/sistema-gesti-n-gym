@@ -1,1 +1,1 @@
-# sistema-gesti-n-gym
+# sistema-gestión-gym
