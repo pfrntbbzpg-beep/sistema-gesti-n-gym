@@ -2,21 +2,962 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Sistema de Gestión GYM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NOVA Gym | Sistema de gestión</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Librería de Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- index.js solo guarda SUPABASE_URL y SUPABASE_KEY -->
+  <script src="index.js"></script>
+
+  <style>
+    /* Colores inspirados en los discos olímpicos: cada sección tiene su color */
+    :root {
+      --piso: #1c1f22;        /* piso de hule */
+      --panel: #25292d;
+      --panel-2: #2e3338;
+      --linea: #3a4046;
+      --gis: #f1efea;         /* blanco gis (magnesia) */
+      --gris: #a9adb1;
+      --azul: #2f6fd6;        /* clientes */
+      --amarillo: #f2c230;    /* membresías */
+      --verde: #2e9e5b;       /* entrenadores */
+      --rojo: #d8412f;        /* rutinas */
+      --error: #ff6b5a;
+      --radio: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Barlow", system-ui, sans-serif;
+      font-size: 1rem;
+      line-height: 1.5;
+      background: var(--piso);
+      color: var(--gis);
+      min-height: 100vh;
+    }
+    img { display: block; max-width: 100%; }
+    .oculto { display: none !important; }
+    h1, h2, h3, .marca, .numero {
+      font-family: "Big Shoulders Display", "Arial Narrow", sans-serif;
+      font-weight: 800;
+      line-height: 0.95;
+    }
+    :focus-visible { outline: 3px solid var(--amarillo); outline-offset: 2px; }
+
+    .marca { font-size: 2rem; letter-spacing: 0.02em; }
+    .marca span { color: var(--amarillo); }
+
+    /* ---------- Formularios y botones ---------- */
+    form { display: flex; flex-direction: column; gap: 0.9rem; }
+    label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 600; font-size: 0.95rem; }
+    input, select {
+      font: inherit;
+      font-weight: 400;
+      color: var(--gis);
+      background: var(--panel-2);
+      border: 1px solid var(--linea);
+      border-radius: 8px;
+      padding: 0.7rem 0.85rem;
+      width: 100%;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--c, var(--amarillo)); }
+    .btn {
+      font: inherit;
+      font-weight: 700;
+      background: var(--c, var(--amarillo));
+      color: var(--c-texto, #1c1f22);
+      border: 0;
+      border-radius: 8px;
+      padding: 0.8rem 1.2rem;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: 0.6; cursor: wait; }
+    .btn-borrar {
+      font: inherit;
+      font-size: 0.85rem;
+      color: var(--gris);
+      background: none;
+      border: 1px solid var(--linea);
+      border-radius: 6px;
+      padding: 0.25rem 0.65rem;
+      cursor: pointer;
+    }
+    .btn-borrar:hover { color: var(--error); border-color: var(--error); }
+
+    /* ---------- Login ---------- */
+    .login { display: grid; grid-template-columns: 1.15fr 1fr; min-height: 100vh; }
+    .login-foto { position: relative; overflow: hidden; background: #2a2f34; }
+    .login-foto img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.3) brightness(0.55); }
+    .login-lema { position: absolute; left: 8%; right: 8%; bottom: 9%; }
+    .login-lema h2 { font-size: clamp(3rem, 7vw, 6rem); }
+    .login-lema p { margin-top: 0.8rem; max-width: 32ch; font-size: 1.15rem; color: #dcdad5; }
+    .login-panel {
+      width: 100%;
+      max-width: 480px;
+      margin: auto;
+      padding: 3rem clamp(1.5rem, 6vw, 4rem);
+    }
+    .login-panel h1 { font-size: 2.8rem; margin: 2.2rem 0 1.4rem; }
+    .cambiar { margin-top: 1.2rem; color: var(--gris); }
+    .cambiar a { color: var(--amarillo); font-weight: 600; }
+    .msg { margin-top: 1rem; min-height: 1.5em; color: var(--amarillo); }
+
+    /* ---------- Barra superior y menú ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      padding: 0.75rem clamp(1rem, 4vw, 2.5rem);
+      background: rgba(28, 31, 34, 0.94);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--linea);
+    }
+    #menu { display: flex; gap: 0.3rem; flex: 1; overflow-x: auto; scrollbar-width: none; }
+    #menu button {
+      font: inherit;
+      font-weight: 600;
+      color: var(--gris);
+      background: none;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      padding: 0.5rem 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #menu button:hover { color: var(--gis); }
+    #menu button.activo { color: var(--gis); border-bottom-color: var(--c, var(--gis)); }
+    .usuario { display: flex; align-items: center; gap: 0.75rem; color: var(--gris); white-space: nowrap; }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem clamp(1rem, 4vw, 2.5rem) 3rem; }
+    .vista { display: none; }
+    .vista.activa { display: block; }
+    .encabezado { margin-bottom: 1.5rem; border-left: 6px solid var(--c, var(--gis)); padding-left: 1rem; }
+    .encabezado h2 { font-size: 3rem; }
+    .encabezado p { color: var(--gris); }
+
+    /* Color de cada sección */
+    #clientes, [data-vista="clientes"] { --c: var(--azul); --c-texto: #fff; }
+    #membresias, [data-vista="membresias"] { --c: var(--amarillo); --c-texto: #1c1f22; }
+    #entrenadores, [data-vista="entrenadores"] { --c: var(--verde); --c-texto: #fff; }
+    #rutinas, [data-vista="rutinas"] { --c: var(--rojo); --c-texto: #fff; }
+    #chat, [data-vista="chat"] { --c: var(--gis); --c-texto: #1c1f22; }
+
+    /* ---------- Inicio ---------- */
+    .hero {
+      position: relative;
+      min-height: 380px;
+      display: flex;
+      align-items: flex-end;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #2a2f34;
+    }
+    .hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(28,31,34,0.95) 0%, rgba(28,31,34,0.6) 55%, rgba(28,31,34,0.15) 100%);
+    }
+    .hero-texto { position: relative; z-index: 1; max-width: 620px; padding: clamp(1.5rem, 4vw, 3rem); }
+    .hero h1 { font-size: clamp(3.2rem, 8vw, 6rem); margin-bottom: 0.8rem; }
+    .hero p { font-size: 1.15rem; color: #dcdad5; max-width: 46ch; }
+
+    /* Los contadores son discos de pesas: tócalos para ir a la sección */
+    .discos {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(0.8rem, 3vw, 2rem);
+      margin: 2.5rem 0;
+    }
+    .disco {
+      aspect-ratio: 1;
+      border: 0;
+      border-radius: 50%;
+      background: var(--c);
+      color: var(--c-texto);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow:
+        inset 0 0 0 clamp(6px, 1.2vw, 12px) rgba(0,0,0,0.22),
+        inset 0 0 0 clamp(14px, 2.6vw, 26px) var(--c),
+        inset 0 0 0 clamp(16px, 2.9vw, 29px) rgba(0,0,0,0.18),
+        0 10px 24px rgba(0,0,0,0.35);
+      font: inherit;
+      transition: transform 0.25s ease;
+    }
+    .disco:hover { transform: rotate(-12deg); }
+    .disco .numero { font-size: clamp(2.2rem, 6vw, 4.2rem); }
+    .disco .nombre { font-weight: 700; font-size: clamp(0.8rem, 1.8vw, 1.05rem); }
+
+    .titulo { font-size: 2.2rem; margin-bottom: 1rem; }
+    .galeria { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .galeria figure {
+      position: relative;
+      aspect-ratio: 4 / 5;
+      border-radius: var(--radio);
+      overflow: hidden;
+      background: var(--panel-2);
+    }
+    .galeria img { width: 100%; height: 100%; object-fit: cover; }
+    .galeria figcaption {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      padding: 3rem 1rem 1rem;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    }
+    .galeria figcaption strong { display: block; font-family: "Big Shoulders Display", sans-serif; font-size: 1.7rem; }
+    .galeria figcaption span { color: #dcdad5; font-size: 0.95rem; }
+
+    /* ---------- Tarjetas, tablas y listas ---------- */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) 1fr;
+      gap: 1.25rem;
+      align-items: start;
+      margin-bottom: 1.25rem;
+    }
+    .columna { display: flex; flex-direction: column; gap: 1.25rem; }
+    .tarjeta { background: var(--panel); border: 1px solid var(--linea); border-radius: var(--radio); padding: 1.3rem; }
+    .tarjeta h3 { font-size: 1.7rem; margin-bottom: 1rem; }
+    .tabla-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th { text-align: left; color: var(--gris); font-weight: 600; padding: 0.5rem 0.7rem; border-bottom: 2px solid var(--linea); }
+    td { padding: 0.7rem; border-bottom: 1px solid var(--linea); white-space: nowrap; }
+    tr:last-child td { border-bottom: 0; }
+    .vacio { color: var(--gris); text-align: center; padding: 1.5rem; }
+
+    .planes { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; }
+    .plan { background: var(--panel-2); border-top: 5px solid var(--amarillo); border-radius: 8px; padding: 1rem 1.1rem; }
+    .plan-nombre { font-weight: 700; font-size: 1.05rem; }
+    .plan-precio { font-family: "Big Shoulders Display", sans-serif; font-weight: 800; font-size: 2.4rem; line-height: 1.1; }
+    .plan-dur { color: var(--gris); margin-bottom: 0.8rem; }
+    .estado { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; }
+    .estado.activa { background: rgba(46,158,91,0.2); color: #5fd38f; }
+    .estado.vencida { background: rgba(216,65,47,0.2); color: var(--error); }
+
+    .coaches { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .coach { display: flex; align-items: center; gap: 1rem; background: var(--panel-2); border-radius: 8px; padding: 1rem; }
+    .coach-info { flex: 1; min-width: 0; }
+    .avatar {
+      width: 54px; height: 54px; flex-shrink: 0;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--verde); color: #fff;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 5px rgba(0,0,0,0.2);
+    }
+    .coach-nombre { font-weight: 700; }
+    .coach-esp { color: #5fd38f; font-size: 0.95rem; }
+    .coach-tel { color: var(--gris); font-size: 0.9rem; }
+
+    .rutinas { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .rutina { background: var(--panel); border: 1px solid var(--linea); border-left: 5px solid var(--rojo); border-radius: 8px; padding: 1.1rem; }
+    .rutina-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .rutina-nombre { font-family: "Big Shoulders Display", sans-serif; font-weight: 800; font-size: 1.8rem; line-height: 1; }
+    .rutina-meta { color: var(--gris); font-size: 0.95rem; margin-top: 0.3rem; }
+    .rutina-obj { margin-top: 0.5rem; }
+    .ejercicios { list-style: none; margin-top: 0.8rem; }
+    .ejercicios li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-top: 1px dashed var(--linea); }
+    .ejercicios li span:first-child { flex: 1; }
+    .series { font-weight: 700; color: #ff8a7a; }
+    .x { background: none; border: 0; color: var(--gris); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+    .x:hover { color: var(--error); }
+
+    /* ---------- Chat ---------- */
+    .chat { display: flex; flex-direction: column; height: min(70vh, 640px); padding: 0; overflow: hidden; }
+    #listaMensajes { flex: 1; overflow-y: auto; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.7rem; }
+    .mensaje {
+      align-self: flex-start;
+      max-width: 75%;
+      background: var(--panel-2);
+      border-radius: 14px 14px 14px 4px;
+      padding: 0.55rem 0.9rem;
+    }
+    .mensaje.mio { align-self: flex-end; background: var(--gis); color: var(--piso); border-radius: 14px 14px 4px 14px; }
+    .autor { font-size: 0.8rem; font-weight: 700; opacity: 0.7; }
+    .texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+    #formChat { flex-direction: row; gap: 0.6rem; padding: 1rem; border-top: 1px solid var(--linea); }
+
+    footer { text-align: center; color: var(--gris); font-size: 0.9rem; padding: 2rem 1rem; border-top: 1px solid var(--linea); }
+
+    /* Aviso flotante */
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 1.5rem;
+      transform: translate(-50%, 200%);
+      max-width: 90vw;
+      background: var(--panel-2);
+      border-left: 5px solid var(--verde);
+      border-radius: 8px;
+      padding: 0.8rem 1.2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      transition: transform 0.3s ease;
+      z-index: 50;
+    }
+    #toast.visible { transform: translate(-50%, 0); }
+    #toast.error { border-left-color: var(--error); }
+
+    /* ---------- Pantallas chicas ---------- */
+    @media (max-width: 860px) {
+      .login { grid-template-columns: 1fr; }
+      .login-foto { min-height: 240px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .topbar { flex-wrap: wrap; gap: 0.5rem; }
+      #menu { order: 3; flex-basis: 100%; }
+      .usuario { margin-left: auto; }
+      .discos { grid-template-columns: repeat(2, 1fr); }
+      .galeria { grid-template-columns: 1fr; }
+      .galeria figure { aspect-ratio: 16 / 9; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Clientes del Gym</h1>
 
-  <form id="formCliente">
-    <input type="text" id="nombre" placeholder="Nombre" required>
-    <input type="text" id="telefono" placeholder="Teléfono">
-    <input type="email" id="correo" placeholder="Correo">
-    <button type="submit">Agregar cliente</button>
-  </form>
+  <!-- ================= LOGIN ================= -->
+  <section id="vistaLogin" class="login">
+    <div class="login-foto">
+      <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=1400&q=80"
+           alt="Persona entrenando con pesas" onerror="this.remove()">
+      <div class="login-lema">
+        <h2>Enciende tu mejor versión</h2>
+        <p>Sistema de gestión para administrar clientes, membresías, entrenadores y rutinas.</p>
+      </div>
+    </div>
 
-  <ul id="listaClientes"></ul>
+    <div class="login-panel">
+      <div class="marca">NOVA <span>Gym</span></div>
+      <h1 id="tituloAuth">Inicia sesión</h1>
 
-  <script src="index.js"></script>
+      <form id="formAuth">
+        <label id="campoNombre" class="oculto">Tu nombre
+          <input id="authNombre" autocomplete="name">
+        </label>
+        <label>Correo
+          <input type="email" id="authCorreo" autocomplete="email" required>
+        </label>
+        <label>Contraseña
+          <input type="password" id="authPass" minlength="6" autocomplete="current-password" required>
+        </label>
+        <button class="btn" id="btnAuth">Entrar</button>
+      </form>
+
+      <p class="cambiar"><span id="textoCambiar">¿No tienes cuenta?</span> <a href="#" id="linkCambiar">Regístrate</a></p>
+      <p class="msg" id="msgAuth"></p>
+    </div>
+  </section>
+
+  <!-- ================= SISTEMA ================= -->
+  <div id="vistaApp" class="oculto">
+    <header class="topbar">
+      <div class="marca">NOVA <span>Gym</span></div>
+      <nav id="menu">
+        <button data-vista="inicio" class="activo">Inicio</button>
+        <button data-vista="clientes">Clientes</button>
+        <button data-vista="membresias">Membresías</button>
+        <button data-vista="entrenadores">Entrenadores</button>
+        <button data-vista="rutinas">Rutinas</button>
+        <button data-vista="chat">Chat</button>
+      </nav>
+      <div class="usuario">
+        <span id="nombreUsuario"></span>
+        <button class="btn-borrar" id="btnSalir">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- INICIO -->
+      <section id="inicio" class="vista activa">
+        <div class="hero">
+          <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1600&q=80"
+               alt="Área de pesas del gimnasio" onerror="this.remove()">
+          <div class="hero-texto">
+            <h1>Todo tu gym en un solo lugar</h1>
+            <p>Toca un disco para ir directo a esa sección.</p>
+          </div>
+        </div>
+
+        <div class="discos">
+          <button class="disco" data-vista="clientes"><span class="numero" id="statClientes">0</span><span class="nombre">Clientes</span></button>
+          <button class="disco" data-vista="membresias"><span class="numero" id="statActivas">0</span><span class="nombre">Membresías activas</span></button>
+          <button class="disco" data-vista="entrenadores"><span class="numero" id="statEntrenadores">0</span><span class="nombre">Entrenadores</span></button>
+          <button class="disco" data-vista="rutinas"><span class="numero" id="statRutinas">0</span><span class="nombre">Rutinas</span></button>
+        </div>
+
+        <h2 class="titulo">Nuestras áreas</h2>
+        <div class="galeria">
+          <figure>
+            <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=900&q=80" alt="Entrenamiento funcional" onerror="this.remove()">
+            <figcaption><strong>Funcional</strong><span>Circuitos y trabajo con peso corporal.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=900&q=80" alt="Máquinas del gimnasio" onerror="this.remove()">
+            <figcaption><strong>Máquinas</strong><span>Equipo para cada grupo muscular.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=900&q=80" alt="Pesas libres" onerror="this.remove()">
+            <figcaption><strong>Peso libre</strong><span>Mancuernas, barras y discos.</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section id="clientes" class="vista">
+        <div class="encabezado">
+          <h2>Clientes</h2>
+          <p>Registra a los socios del gym y consulta sus datos.</p>
+        </div>
+        <div class="grid-2">
+          <form id="formNuevoCliente" class="tarjeta">
+            <h3>Nuevo cliente</h3>
+            <label>Nombre <input id="cliNombre" required></label>
+            <label>Teléfono <input id="cliTelefono" inputmode="tel"></label>
+            <label>Correo <input type="email" id="cliCorreo"></label>
+            <button class="btn">Agregar cliente</button>
+          </form>
+          <div class="tarjeta">
+            <h3>Lista de clientes</h3>
+            <div class="tabla-wrap">
+              <table>
+                <thead><tr><th>Nombre</th><th>Teléfono</th><th>Correo</th><th>Registro</th><th></th></tr></thead>
+                <tbody id="tablaClientes"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MEMBRESÍAS -->
+      <section id="membresias" class="vista">
+        <div class="encabezado">
+          <h2>Membresías</h2>
+          <p>Crea los planes del gym y asígnalos a tus clientes.</p>
+        </div>
+        <div class="grid-2">
+          <form id="formMembresia" class="tarjeta">
+            <h3>Nuevo plan</h3>
+            <label>Nombre del plan <input id="memNombre" placeholder="Ej. Mensual" required></label>
+            <label>Precio (MXN) <input type="number" id="memPrecio" min="0" step="0.01" required></label>
+            <label>Duración (días) <input type="number" id="memDuracion" min="1" required></label>
+            <button class="btn">Crear plan</button>
+          </form>
+          <div class="tarjeta">
+            <h3>Planes disponibles</h3>
+            <div class="planes" id="listaMembresias"></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <form id="formAsignacion" class="tarjeta">
+            <h3>Asignar membresía</h3>
+            <label>Cliente <select id="asigCliente" required></select></label>
+            <label>Plan <select id="asigMembresia" required></select></label>
+            <label>Fecha de inicio <input type="date" id="asigInicio" required></label>
+            <button class="btn">Asignar membresía</button>
+          </form>
+          <div class="tarjeta">
+            <h3>Membresías de clientes</h3>
+            <div class="tabla-wrap">
+              <table>
+                <thead><tr><th>Cliente</th><th>Plan</th><th>Inicio</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+                <tbody id="tablaAsignaciones"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ENTRENADORES -->
+      <section id="entrenadores" class="vista">
+        <div class="encabezado">
+          <h2>Entrenadores</h2>
+          <p>El equipo que acompaña a los clientes en sus rutinas.</p>
+        </div>
+        <div class="grid-2">
+          <form id="formEntrenador" class="tarjeta">
+            <h3>Nuevo entrenador</h3>
+            <label>Nombre <input id="entNombre" required></label>
+            <label>Especialidad <input id="entEspecialidad" placeholder="Ej. Hipertrofia"></label>
+            <label>Teléfono <input id="entTelefono" inputmode="tel"></label>
+            <button class="btn">Agregar entrenador</button>
+          </form>
+          <div class="tarjeta">
+            <h3>Equipo</h3>
+            <div class="coaches" id="listaEntrenadores"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RUTINAS -->
+      <section id="rutinas" class="vista">
+        <div class="encabezado">
+          <h2>Rutinas</h2>
+          <p>Arma rutinas para cada cliente y agrega sus ejercicios.</p>
+        </div>
+        <div class="grid-2">
+          <div class="columna">
+            <form id="formRutina" class="tarjeta">
+              <h3>Nueva rutina</h3>
+              <label>Cliente <select id="rutCliente" required></select></label>
+              <label>Entrenador <select id="rutEntrenador" required></select></label>
+              <label>Nombre de la rutina <input id="rutNombre" placeholder="Ej. Pierna y glúteo" required></label>
+              <label>Objetivo <input id="rutObjetivo" placeholder="Ej. Ganar fuerza"></label>
+              <button class="btn">Crear rutina</button>
+            </form>
+            <form id="formEjercicio" class="tarjeta">
+              <h3>Agregar ejercicio</h3>
+              <label>Rutina <select id="ejRutina" required></select></label>
+              <label>Ejercicio <input id="ejNombre" placeholder="Ej. Sentadilla" required></label>
+              <label>Series <input type="number" id="ejSeries" min="1" required></label>
+              <label>Repeticiones <input type="number" id="ejReps" min="1" required></label>
+              <button class="btn">Agregar ejercicio</button>
+            </form>
+          </div>
+          <div class="rutinas" id="listaRutinas"></div>
+        </div>
+      </section>
+
+      <!-- CHAT -->
+      <section id="chat" class="vista">
+        <div class="encabezado">
+          <h2>Chat</h2>
+          <p>Mensajes en tiempo real entre el personal del gym.</p>
+        </div>
+        <div class="tarjeta chat">
+          <div id="listaMensajes"><p class="vacio">Cargando mensajes…</p></div>
+          <form id="formChat">
+            <input id="chatTexto" placeholder="Escribe un mensaje" autocomplete="off" maxlength="500">
+            <button class="btn">Enviar</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer>NOVA Gym | Proyecto del Laboratorio de Programación Orientada a Objetos, FIME UANL</footer>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+  <script>
+    // ===== Conexión (la URL y la key vienen de index.js) =====
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let usuarioActual = null;
+    let canalChat = null;
+    let modoRegistro = false;
+    const datos = { clientes: [], membresias: [], entrenadores: [], rutinas: [], activas: 0 };
+
+    // ===== Utilidades =====
+    const $ = (id) => document.getElementById(id);
+
+    function escapar(texto) {
+      const div = document.createElement("div");
+      div.textContent = texto ?? "";
+      return div.innerHTML;
+    }
+
+    function fechaISO(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+    const hoy = () => fechaISO(new Date());
+
+    function fechaBonita(f) {
+      if (!f) return "—";
+      return new Date(f + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    const dinero = (n) => Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+
+    const iniciales = (nombre) =>
+      nombre.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+
+    function aviso(texto, tipo = "ok") {
+      const t = $("toast");
+      t.textContent = texto;
+      t.className = "visible " + tipo;
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => (t.className = ""), 3500);
+    }
+
+    function mensajeError(error) {
+      if (error.code === "23503") return "No se puede eliminar porque tiene registros relacionados. Elimina primero esos registros.";
+      return error.message;
+    }
+
+    function llenarSelect(ids, lista, campoId, texto) {
+      ids.forEach((id) => {
+        const sel = $(id);
+        const anterior = sel.value;
+        sel.innerHTML =
+          `<option value="">Selecciona una opción</option>` +
+          lista.map((x) => `<option value="${x[campoId]}">${escapar(texto(x))}</option>`).join("");
+        sel.value = anterior;
+      });
+    }
+
+    // ===== Login y registro =====
+    function traducirAuth(m) {
+      if (m.includes("Invalid login")) return "Correo o contraseña incorrectos.";
+      if (m.includes("already registered")) return "Ese correo ya tiene una cuenta. Inicia sesión.";
+      if (m.includes("Email not confirmed")) return "Confirma tu correo antes de iniciar sesión.";
+      if (m.includes("at least 6")) return "La contraseña debe tener al menos 6 caracteres.";
+      return m;
+    }
+
+    $("linkCambiar").addEventListener("click", (e) => {
+      e.preventDefault();
+      modoRegistro = !modoRegistro;
+      $("tituloAuth").textContent = modoRegistro ? "Crea tu cuenta" : "Inicia sesión";
+      $("btnAuth").textContent = modoRegistro ? "Crear cuenta" : "Entrar";
+      $("textoCambiar").textContent = modoRegistro ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?";
+      $("linkCambiar").textContent = modoRegistro ? "Inicia sesión" : "Regístrate";
+      $("campoNombre").classList.toggle("oculto", !modoRegistro);
+      $("authNombre").required = modoRegistro;
+      $("msgAuth").textContent = "";
+    });
+
+    $("formAuth").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const correo = $("authCorreo").value.trim();
+      const pass = $("authPass").value;
+      $("btnAuth").disabled = true;
+      $("msgAuth").textContent = "";
+
+      let resultado;
+      if (modoRegistro) {
+        resultado = await sb.auth.signUp({
+          email: correo,
+          password: pass,
+          options: { data: { nombre: $("authNombre").value.trim() } },
+        });
+      } else {
+        resultado = await sb.auth.signInWithPassword({ email: correo, password: pass });
+      }
+      $("btnAuth").disabled = false;
+
+      if (resultado.error) {
+        $("msgAuth").textContent = traducirAuth(resultado.error.message);
+      } else if (modoRegistro && !resultado.data.session) {
+        $("msgAuth").textContent = "Cuenta creada. Revisa tu correo para confirmarla y después inicia sesión.";
+      }
+    });
+
+    $("btnSalir").addEventListener("click", () => sb.auth.signOut());
+
+    const nombreDe = (u) => u.user_metadata?.nombre || u.email.split("@")[0];
+
+    sb.auth.onAuthStateChange((evento, sesion) => {
+      const usuario = sesion?.user ?? null;
+      if (usuario && !usuarioActual) {
+        usuarioActual = usuario;
+        setTimeout(entrarAlSistema, 0);
+      } else if (!usuario && usuarioActual) {
+        usuarioActual = null;
+        setTimeout(salirDelSistema, 0);
+      }
+    });
+
+    function entrarAlSistema() {
+      $("vistaLogin").classList.add("oculto");
+      $("vistaApp").classList.remove("oculto");
+      $("nombreUsuario").textContent = nombreDe(usuarioActual);
+      $("formAuth").reset();
+      $("asigInicio").value = hoy();
+      mostrarVista("inicio");
+      cargarTodo();
+      iniciarChat();
+    }
+
+    function salirDelSistema() {
+      $("vistaApp").classList.add("oculto");
+      $("vistaLogin").classList.remove("oculto");
+      if (canalChat) {
+        sb.removeChannel(canalChat);
+        canalChat = null;
+      }
+    }
+
+    // ===== Menú =====
+    function mostrarVista(id) {
+      document.querySelectorAll(".vista").forEach((v) => v.classList.toggle("activa", v.id === id));
+      document.querySelectorAll("#menu button").forEach((b) => b.classList.toggle("activo", b.dataset.vista === id));
+      window.scrollTo(0, 0);
+      if (id === "chat") bajarChat();
+    }
+    document.querySelectorAll("#menu button, .disco").forEach((b) =>
+      b.addEventListener("click", () => mostrarVista(b.dataset.vista))
+    );
+
+    // ===== Cargar datos =====
+    async function cargarTodo() {
+      await Promise.all([cargarClientes(), cargarMembresias(), cargarEntrenadores()]);
+      await Promise.all([cargarAsignaciones(), cargarRutinas()]);
+      $("statClientes").textContent = datos.clientes.length;
+      $("statActivas").textContent = datos.activas;
+      $("statEntrenadores").textContent = datos.entrenadores.length;
+      $("statRutinas").textContent = datos.rutinas.length;
+    }
+
+    async function cargarClientes() {
+      const { data, error } = await sb.from("clientes").select("*").order("id_cliente");
+      if (error) return aviso("No se pudieron cargar los clientes: " + error.message, "error");
+      datos.clientes = data;
+      $("tablaClientes").innerHTML = data.length
+        ? data.map((c) => `
+          <tr>
+            <td><strong>${escapar(c.nombre)}</strong></td>
+            <td>${escapar(c.telefono) || "—"}</td>
+            <td>${escapar(c.correo) || "—"}</td>
+            <td>${fechaBonita(c.fecha_registro)}</td>
+            <td><button class="btn-borrar" onclick="borrar('clientes', 'id_cliente', ${c.id_cliente})">Eliminar</button></td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" class="vacio">Aún no hay clientes. Agrega el primero con el formulario.</td></tr>`;
+      llenarSelect(["asigCliente", "rutCliente"], data, "id_cliente", (c) => c.nombre);
+    }
+
+    async function cargarMembresias() {
+      const { data, error } = await sb.from("membresias").select("*").order("precio");
+      if (error) return aviso("No se pudieron cargar las membresías: " + error.message, "error");
+      datos.membresias = data;
+      $("listaMembresias").innerHTML = data.length
+        ? data.map((m) => `
+          <article class="plan">
+            <p class="plan-nombre">${escapar(m.nombre)}</p>
+            <p class="plan-precio">${dinero(m.precio)}</p>
+            <p class="plan-dur">${m.duracion} días</p>
+            <button class="btn-borrar" onclick="borrar('membresias', 'id_membresia', ${m.id_membresia})">Eliminar</button>
+          </article>`).join("")
+        : `<p class="vacio">Aún no hay planes. Crea el primero con el formulario.</p>`;
+      llenarSelect(["asigMembresia"], data, "id_membresia", (m) => `${m.nombre} (${dinero(m.precio)})`);
+    }
+
+    async function cargarAsignaciones() {
+      const { data, error } = await sb
+        .from("clientes_membresias")
+        .select("*, clientes(nombre), membresias(nombre)")
+        .order("fecha_inicio", { ascending: false });
+      if (error) return aviso("No se pudieron cargar las asignaciones: " + error.message, "error");
+      const h = hoy();
+      const estaActiva = (a) => !a.fecha_fin || a.fecha_fin >= h;
+      datos.activas = data.filter(estaActiva).length;
+      $("tablaAsignaciones").innerHTML = data.length
+        ? data.map((a) => `
+          <tr>
+            <td>${escapar(a.clientes?.nombre)}</td>
+            <td>${escapar(a.membresias?.nombre)}</td>
+            <td>${fechaBonita(a.fecha_inicio)}</td>
+            <td>${fechaBonita(a.fecha_fin)}</td>
+            <td><span class="estado ${estaActiva(a) ? "activa" : "vencida"}">${estaActiva(a) ? "Activa" : "Vencida"}</span></td>
+            <td><button class="btn-borrar" onclick="borrar('clientes_membresias', 'id_cliente_membresia', ${a.id_cliente_membresia})">Quitar</button></td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" class="vacio">Ningún cliente tiene membresía todavía.</td></tr>`;
+    }
+
+    async function cargarEntrenadores() {
+      const { data, error } = await sb.from("entrenadores").select("*").order("id_entrenador");
+      if (error) return aviso("No se pudieron cargar los entrenadores: " + error.message, "error");
+      datos.entrenadores = data;
+      $("listaEntrenadores").innerHTML = data.length
+        ? data.map((t) => `
+          <article class="coach">
+            <div class="avatar">${escapar(iniciales(t.nombre))}</div>
+            <div class="coach-info">
+              <p class="coach-nombre">${escapar(t.nombre)}</p>
+              <p class="coach-esp">${escapar(t.especialidad) || "Entrenamiento general"}</p>
+              <p class="coach-tel">${escapar(t.telefono)}</p>
+            </div>
+            <button class="btn-borrar" onclick="borrar('entrenadores', 'id_entrenador', ${t.id_entrenador})">Eliminar</button>
+          </article>`).join("")
+        : `<p class="vacio">Aún no hay entrenadores. Agrega el primero con el formulario.</p>`;
+      llenarSelect(["rutEntrenador"], data, "id_entrenador", (t) => t.nombre);
+    }
+
+    async function cargarRutinas() {
+      const { data, error } = await sb
+        .from("rutinas")
+        .select("*, clientes(nombre), entrenadores(nombre), ejercicios(*)")
+        .order("id_rutina");
+      if (error) return aviso("No se pudieron cargar las rutinas: " + error.message, "error");
+      datos.rutinas = data;
+      $("listaRutinas").innerHTML = data.length
+        ? data.map((r) => {
+            const ejercicios = (r.ejercicios || []).sort((a, b) => a.id_ejercicio - b.id_ejercicio);
+            return `
+            <article class="rutina">
+              <div class="rutina-top">
+                <div>
+                  <p class="rutina-nombre">${escapar(r.nombre)}</p>
+                  <p class="rutina-meta">Para ${escapar(r.clientes?.nombre)}, con ${escapar(r.entrenadores?.nombre)}</p>
+                </div>
+                <button class="btn-borrar" onclick="borrar('rutinas', 'id_rutina', ${r.id_rutina})">Eliminar</button>
+              </div>
+              ${r.objetivo ? `<p class="rutina-obj">Objetivo: ${escapar(r.objetivo)}</p>` : ""}
+              <ul class="ejercicios">
+                ${ejercicios.length
+                  ? ejercicios.map((ej) => `
+                    <li>
+                      <span>${escapar(ej.nombre)}</span>
+                      <span class="series">${ej.series} x ${ej.repeticiones}</span>
+                      <button class="x" title="Quitar ejercicio" onclick="borrar('ejercicios', 'id_ejercicio', ${ej.id_ejercicio})">×</button>
+                    </li>`).join("")
+                  : `<li class="vacio">Agrega ejercicios con el formulario.</li>`}
+              </ul>
+            </article>`;
+          }).join("")
+        : `<div class="tarjeta vacio">Aún no hay rutinas. Crea la primera con el formulario.</div>`;
+      llenarSelect(["ejRutina"], data, "id_rutina", (r) => `${r.nombre} (${r.clientes?.nombre ?? ""})`);
+    }
+
+    // ===== Guardar y eliminar =====
+    async function insertar(tabla, registro, form, mensaje) {
+      const { error } = await sb.from(tabla).insert([registro]);
+      if (error) {
+        aviso("No se guardó: " + error.message, "error");
+        return false;
+      }
+      form.reset();
+      aviso(mensaje);
+      cargarTodo();
+      return true;
+    }
+
+    async function borrar(tabla, campo, id) {
+      if (!confirm("¿Seguro que quieres eliminar este registro?")) return;
+      const { error } = await sb.from(tabla).delete().eq(campo, id);
+      if (error) return aviso(mensajeError(error), "error");
+      aviso("Registro eliminado");
+      cargarTodo();
+    }
+
+    $("formNuevoCliente").addEventListener("submit", (e) => {
+      e.preventDefault();
+      insertar("clientes", {
+        nombre: $("cliNombre").value.trim(),
+        telefono: $("cliTelefono").value.trim() || null,
+        correo: $("cliCorreo").value.trim() || null,
+        fecha_registro: hoy(),
+      }, e.target, "Cliente agregado");
+    });
+
+    $("formMembresia").addEventListener("submit", (e) => {
+      e.preventDefault();
+      insertar("membresias", {
+        nombre: $("memNombre").value.trim(),
+        precio: Number($("memPrecio").value),
+        duracion: Number($("memDuracion").value),
+      }, e.target, "Plan creado");
+    });
+
+    $("formAsignacion").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const plan = datos.membresias.find((m) => m.id_membresia == $("asigMembresia").value);
+      const inicio = $("asigInicio").value;
+      const fin = new Date(inicio + "T00:00:00");
+      fin.setDate(fin.getDate() + Number(plan.duracion));
+      const ok = await insertar("clientes_membresias", {
+        id_cliente: Number($("asigCliente").value),
+        id_membresia: plan.id_membresia,
+        fecha_inicio: inicio,
+        fecha_fin: fechaISO(fin),
+      }, e.target, "Membresía asignada");
+      if (ok) $("asigInicio").value = hoy();
+    });
+
+    $("formEntrenador").addEventListener("submit", (e) => {
+      e.preventDefault();
+      insertar("entrenadores", {
+        nombre: $("entNombre").value.trim(),
+        especialidad: $("entEspecialidad").value.trim() || null,
+        telefono: $("entTelefono").value.trim() || null,
+      }, e.target, "Entrenador agregado");
+    });
+
+    $("formRutina").addEventListener("submit", (e) => {
+      e.preventDefault();
+      insertar("rutinas", {
+        id_cliente: Number($("rutCliente").value),
+        id_entrenador: Number($("rutEntrenador").value),
+        nombre: $("rutNombre").value.trim(),
+        objetivo: $("rutObjetivo").value.trim() || null,
+      }, e.target, "Rutina creada");
+    });
+
+    $("formEjercicio").addEventListener("submit", (e) => {
+      e.preventDefault();
+      insertar("ejercicios", {
+        id_rutina: Number($("ejRutina").value),
+        nombre: $("ejNombre").value.trim(),
+        series: Number($("ejSeries").value),
+        repeticiones: Number($("ejReps").value),
+      }, e.target, "Ejercicio agregado");
+    });
+
+    // ===== Chat en tiempo real =====
+    function bajarChat() {
+      const lista = $("listaMensajes");
+      lista.scrollTop = lista.scrollHeight;
+    }
+
+    function pintarMensaje(m) {
+      const lista = $("listaMensajes");
+      lista.querySelector(".vacio")?.remove();
+      const div = document.createElement("div");
+      div.className = "mensaje" + (m.usuario_id === usuarioActual?.id ? " mio" : "");
+      const hora = new Date(m.created_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+      div.innerHTML = `<p class="autor">${escapar(m.usuario)}, ${hora}</p><p class="texto">${escapar(m.texto)}</p>`;
+      lista.appendChild(div);
+    }
+
+    async function iniciarChat() {
+      const lista = $("listaMensajes");
+      const { data, error } = await sb
+        .from("mensajes")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        lista.innerHTML = `<p class="vacio">No se pudo abrir el chat: ${escapar(error.message)}</p>`;
+        return;
+      }
+      lista.innerHTML = data.length ? "" : `<p class="vacio">Todavía no hay mensajes. Escribe el primero.</p>`;
+      data.reverse().forEach(pintarMensaje);
+      bajarChat();
+
+      canalChat = sb
+        .channel("chat-gym")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "mensajes" }, (cambio) => {
+          pintarMensaje(cambio.new);
+          bajarChat();
+        })
+        .subscribe();
+    }
+
+    $("formChat").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const texto = $("chatTexto").value.trim();
+      if (!texto) return;
+      $("chatTexto").value = "";
+      const { error } = await sb.from("mensajes").insert([{ usuario: nombreDe(usuarioActual), texto }]);
+      if (error) {
+        aviso("No se envió el mensaje: " + error.message, "error");
+        $("chatTexto").value = texto;
+      }
+    });
+  </script>
 </body>
 </html>
