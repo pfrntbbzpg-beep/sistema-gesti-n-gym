@@ -1,10 +1,11 @@
 const SUPABASE_URL = "https://lafnqghrmyiuayazczkp.supabase.co";
 const SUPABASE_KEY = "sb_publishable_pkwtletsazrh5ILO6DXkAA_EcZj4pJF";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+alert("Conectado con Supabase");
 
 async function cargarClientes() {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("clientes")
     .select("*")
     .order("id_cliente", { ascending: true });
@@ -13,7 +14,7 @@ async function cargarClientes() {
   lista.innerHTML = "";
 
   if (error) {
-    console.error("Error al cargar clientes:", error);
+    alert("Error al cargar clientes: " + error.message);
     return;
   }
 
@@ -31,7 +32,7 @@ document.getElementById("formCliente").addEventListener("submit", async (e) => {
   const telefono = document.getElementById("telefono").value;
   const correo = document.getElementById("correo").value;
 
-  const { error } = await supabase.from("clientes").insert([
+  const { error } = await db.from("clientes").insert([
     {
       nombre: nombre,
       telefono: telefono,
@@ -41,11 +42,11 @@ document.getElementById("formCliente").addEventListener("submit", async (e) => {
   ]);
 
   if (error) {
-    console.error("Error al insertar cliente:", error);
-    alert("Hubo un error al agregar el cliente.");
+    alert("Error al agregar cliente: " + error.message);
     return;
   }
 
+  alert("Cliente guardado");
   e.target.reset();
   cargarClientes();
 });
